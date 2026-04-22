@@ -42,7 +42,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
     <>
       <header className="flex flex-wrap items-center justify-between gap-2 mb-8">
         <h2 className="flex flex-row gap-3 md:gap-5">
-          <span className="text-3xl font-bold tracking-tight">Transactions</span>
+          <span className="text-3xl font-bold tracking-tight">History</span>
           <span className="text-3xl tracking-tight opacity-20">{total}</span>
         </h2>
         <div className="flex gap-2">

@@ -26,6 +26,8 @@ export interface LLMResponse {
   error?: string
 }
 
+const USE_MOCK = true // ← passer à false pour appeler le vrai Spring
+
 export async function requestLLM(settings: LLMSettings, req: LLMRequest): Promise<LLMResponse> {
   const config = settings.providers[0]
   const baseUrl = config?.baseUrl?.trim() || "http://localhost:8080"
@@ -43,22 +45,44 @@ export async function requestLLM(settings: LLMSettings, req: LLMRequest): Promis
       }
     }
 
-    // 2. Envoi prompt + texte OCR à l'API Spring
-    const response = await fetch(`${baseUrl}/api/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prompt: req.prompt,
-        text: extractedText.trim(),
-        schema: req.schema,
-      }),
-    })
+    console.log("OCR extracted text:", extractedText.trim())
 
-    if (!response.ok) {
-      throw new Error(`Spring API error: ${response.status} ${response.statusText}`)
+    // 2. Mock ou vrai appel Spring
+    let json: { output: Record<string, string>; tokensUsed: number }
+
+    if (USE_MOCK) {
+      json = {
+        output: {
+          name: "Amazon Order #123",
+          merchant: "Amazon",
+          description: "Electronics purchase",
+          total: "49.99",
+          currencyCode: "EUR",
+          type: "expense",
+          categoryCode: "shopping",
+          projectCode: "",
+          issuedAt: "2024-01-15",
+          note: "Mock response",
+        },
+        tokensUsed: 0,
+      }
+    } else {
+      const response = await fetch(`${baseUrl}/api/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: req.prompt,
+          text: extractedText.trim(),
+          schema: req.schema,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Spring API error: ${response.status} ${response.statusText}`)
+      }
+
+      json = await response.json()
     }
-
-    const json = await response.json()
 
     return {
       output: json.output ?? json,

@@ -42,19 +42,7 @@ export async function analyzeFileAction(
     return { success: false, error: "File not found or does not belong to the user" }
   }
 
-  if (isAiBalanceExhausted(user)) {
-    return {
-      success: false,
-      error: "You used all of your pre-paid AI scans, please upgrade your account or buy new subscription plan",
-    }
-  }
 
-  if (isSubscriptionExpired(user)) {
-    return {
-      success: false,
-      error: "Your subscription has expired, please upgrade your account or buy new subscription plan",
-    }
-  }
 
   let attachments: AnalyzeAttachment[] = []
   try {

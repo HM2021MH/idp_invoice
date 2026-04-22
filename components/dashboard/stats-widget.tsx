@@ -95,7 +95,7 @@ export async function StatsWidget({ filters }: { filters: TransactionFilters }) 
         <Link href="/transactions">
           <Card className="bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/40 border-blue-200/50 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Processed Transactions</CardTitle>
+              <CardTitle className="text-sm font-medium">Processed Invoices</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.invoicesProcessed}</div>

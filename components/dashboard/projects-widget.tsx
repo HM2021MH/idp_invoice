@@ -92,7 +92,7 @@ export function ProjectsWidget({
         className="flex items-center justify-center gap-2 border-dashed border-2 border-gradient-to-r rounded-lg p-6 text-muted-foreground transition-all duration-300 hover:scale-[1.02] hover:shadow-lg group"
       >
         <Plus className="h-5 w-5 group-hover:rotate-90 transition-transform duration-300" />
-        <span className="font-medium">Create New Project</span>
+        <span className="font-medium">Create New Group</span>
       </Link>
     </div>
   )
