@@ -20,7 +20,7 @@ export default async function TransactionLayout({
   return (
     <>
       <header className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Transaction Details</h2>
+        <h2 className="text-3xl font-bold tracking-tight">Invoice Details</h2>
       </header>
       <main>
         <div className="flex flex-1 flex-col gap-4 pt-0">{children}</div>

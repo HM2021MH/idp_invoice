@@ -2,7 +2,6 @@
 
 import { ActionState } from "@/lib/actions"
 import { updateFile } from "@/models/files"
-import { getLLMSettings, getSettings } from "@/models/settings"
 import { AnalyzeAttachment } from "./attachments"
 import { requestLLM } from "./providers/llmProvider"
 
@@ -18,37 +17,18 @@ export async function analyzeTransaction(
   fileId: string,
   userId: string
 ): Promise<ActionState<AnalysisResult>> {
-  const settings = await getSettings(userId)
-  const llmSettings = getLLMSettings(settings)
-
   try {
-    const response = await requestLLM(llmSettings, {
-      prompt,
-      schema,
-      attachments,
-    })
+    const response = await requestLLM({ prompt, schema, attachments })
 
-    if (response.error) {
-      throw new Error(response.error)
-    }
+    if (response.error) throw new Error(response.error)
 
-    const result = response.output
-    const tokensUsed = response.tokensUsed || 0
-
-    console.log("LLM response:", result)
-    console.log("LLM tokens used:", tokensUsed)
-
-    await updateFile(fileId, userId, { cachedParseResult: result })
+    await updateFile(fileId, userId, { cachedParseResult: response.output })
 
     return {
       success: true,
-      data: {
-        output: result,
-        tokensUsed: tokensUsed,
-      },
+      data: { output: response.output, tokensUsed: response.tokensUsed ?? 0 },
     }
   } catch (error) {
-    console.error("AI Analysis error:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to analyze invoice",

@@ -79,7 +79,7 @@ export default async function UnsortedPage() {
               <Button variant="outline" asChild>
                 <Link href="/transactions">
                   <FileText />
-                  Go to Transactions
+                  Go to History
                 </Link>
               </Button>
             </div>
