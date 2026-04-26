@@ -6,7 +6,7 @@ import { buildLLMPrompt } from "@/ai/prompt"
 import { fieldsToJsonSchema } from "@/ai/schema"
 import { transactionFormSchema } from "@/forms/transactions"
 import { ActionState } from "@/lib/actions"
-import { getCurrentUser, isAiBalanceExhausted, isSubscriptionExpired } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth"
 import {
   getDirectorySize,
   getTransactionFileUploadPath,
@@ -25,9 +25,31 @@ import {
 import { updateUser } from "@/models/users"
 import { Category, Field, File, Project, Transaction } from "@/prisma/client"
 import { randomUUID } from "crypto"
-import { mkdir, readFile, rename, writeFile } from "fs/promises"
+import { mkdir, readFile, copyFile, unlink, writeFile } from "fs/promises"
 import { revalidatePath } from "next/cache"
 import path from "path"
+
+// ── Core field codes that map directly to Transaction columns ─────────────────
+// Everything else from the form goes into the `extra` JSON column.
+const CORE_FIELD_CODES = new Set([
+  "name",
+  "description",
+  "merchant",
+  "total",
+  "currencyCode",
+  "convertedTotal",
+  "convertedCurrencyCode",
+  "type",
+  "items",
+  "note",
+  "categoryCode",
+  "projectCode",
+  "issuedAt",
+  "text",
+  "data", // ← the full AI JSON blob — stored in the `data` column, not extra
+])
+
+// ── Actions ───────────────────────────────────────────────────────────────────
 
 export async function analyzeFileAction(
   file: File,
@@ -41,8 +63,6 @@ export async function analyzeFileAction(
   if (!file || file.userId !== user.id) {
     return { success: false, error: "File not found or does not belong to the user" }
   }
-
-
 
   let attachments: AnalyzeAttachment[] = []
   try {
@@ -60,7 +80,6 @@ export async function analyzeFileAction(
   )
 
   const schema = fieldsToJsonSchema(fields)
-
   const results = await analyzeTransaction(prompt, schema, attachments, file.id, user.id)
 
   console.log("Analysis results:", results)
@@ -78,13 +97,39 @@ export async function saveFileAsTransactionAction(
 ): Promise<ActionState<Transaction>> {
   try {
     const user = await getCurrentUser()
-    const validatedForm = transactionFormSchema.safeParse(Object.fromEntries(formData.entries()))
 
+    const allEntries = Object.fromEntries(formData.entries())
+    const coreRaw: Record<string, any> = {}
+    const extra: Record<string, any> = {}
+
+    for (const [key, value] of Object.entries(allEntries)) {
+      if (key === "fileId" || key === "forceSave") continue
+      if (key === "data") continue // handled separately below
+      if (value === null || value === undefined || value === "") continue
+
+      if (CORE_FIELD_CODES.has(key)) {
+        coreRaw[key] = value
+      } else {
+        extra[key] = value
+      }
+    }
+
+    // Parse items back from JSON string
+    if (typeof coreRaw.items === "string") {
+      try {
+        coreRaw.items = JSON.parse(coreRaw.items)
+      } catch {
+        coreRaw.items = []
+      }
+    }
+
+    // Validate core fields
+    const validatedForm = transactionFormSchema.safeParse(coreRaw)
     if (!validatedForm.success) {
       return { success: false, error: validatedForm.error.message }
     }
 
-    // Get the file record
+    // Get file record
     const fileId = formData.get("fileId") as string
     const file = await getFileById(fileId, user.id)
     if (!file) throw new Error("File not found")
@@ -92,16 +137,15 @@ export async function saveFileAsTransactionAction(
     const forceSave = formData.get("forceSave") === "true"
     const transactionData = validatedForm.data
 
-    // --- Deduplication Check ---
+    // Deduplication check
     if (!forceSave) {
       const existingTransaction = await findDuplicateTransaction(user.id, transactionData)
-
       if (existingTransaction) {
         return {
           success: false,
           error: "DUPLICATE_FOUND",
           duplicateData: {
-            existingTransaction: existingTransaction,
+            existingTransaction,
             newTransactionData: transactionData,
             resumeIndex: 0,
           },
@@ -109,25 +153,32 @@ export async function saveFileAsTransactionAction(
       }
     }
 
-    const transaction = await createTransaction(user.id, validatedForm.data)
+    // Get the full AI JSON blob from the hidden <input name="data"> field
+    const rawData = formData.get("data") as string | null
 
-    // Move file to processed location
+    // Create transaction — data column gets the full AI JSON, extra gets dynamic fields
+    const transaction = await createTransaction(user.id, {
+      ...transactionData,
+      extra: Object.keys(extra).length > 0 ? extra : undefined,
+      data: rawData ?? "{}",
+    })
+
+    // Move file safely using copy + delete
     const userUploadsDirectory = getUserUploadsDirectory(user)
     const originalFileName = path.basename(file.path)
     const newRelativeFilePath = getTransactionFileUploadPath(file.id, originalFileName, transaction)
+    const oldFullFilePath = path.resolve(safePathJoin(userUploadsDirectory, file.path))
+    const newFullFilePath = path.resolve(safePathJoin(userUploadsDirectory, newRelativeFilePath))
 
-    // Move file to new location and name
-    const oldFullFilePath = safePathJoin(userUploadsDirectory, file.path)
-    const newFullFilePath = safePathJoin(userUploadsDirectory, newRelativeFilePath)
     await mkdir(path.dirname(newFullFilePath), { recursive: true })
-    await rename(path.resolve(oldFullFilePath), path.resolve(newFullFilePath))
+    await copyFile(oldFullFilePath, newFullFilePath)
+    await unlink(oldFullFilePath)
 
-    // Update file record
+    // Update DB records
     await updateFile(file.id, user.id, {
       path: newRelativeFilePath,
       isReviewed: true,
     })
-
     await updateTransactionFiles(transaction.id, user.id, [file.id])
 
     revalidatePath("/unsorted")
@@ -168,31 +219,24 @@ export async function splitFileIntoItemsAction(
       return { success: false, error: "File ID and items are required" }
     }
 
-    // Get the original file
     const originalFile = await getFileById(fileId, user.id)
     if (!originalFile) {
       return { success: false, error: "Original file not found" }
     }
 
-    // Get the original file's content
     const userUploadsDirectory = getUserUploadsDirectory(user)
     const originalFilePath = safePathJoin(userUploadsDirectory, originalFile.path)
     const fileContent = await readFile(originalFilePath)
 
-    // Create a new file for each item
     for (const item of items) {
       const fileUuid = randomUUID()
       const fileName = `${originalFile.filename}-part-${item.name}`
       const relativeFilePath = unsortedFilePath(fileUuid, fileName)
       const fullFilePath = safePathJoin(userUploadsDirectory, relativeFilePath)
 
-      // Create directory if it doesn't exist
       await mkdir(path.dirname(fullFilePath), { recursive: true })
-
-      // Copy the original file content
       await writeFile(fullFilePath, fileContent)
 
-      // Create file record in database with the item data cached
       await createFile(user.id, {
         id: fileUuid,
         filename: fileName,
@@ -200,26 +244,12 @@ export async function splitFileIntoItemsAction(
         mimetype: originalFile.mimetype,
         metadata: originalFile.metadata,
         isSplitted: true,
-        cachedParseResult: {
-          name: item.name,
-          merchant: item.merchant,
-          description: item.description,
-          total: item.total,
-          currencyCode: item.currencyCode,
-          categoryCode: item.categoryCode,
-          projectCode: item.projectCode,
-          type: item.type,
-          issuedAt: item.issuedAt,
-          note: item.note,
-          text: item.text,
-        },
+        cachedParseResult: item,
       })
     }
 
-    // Delete the original file
     await deleteFile(fileId, user.id)
 
-    // Update user storage used
     const storageUsed = await getDirectorySize(getUserUploadsDirectory(user))
     await updateUser(user.id, { storageUsed })
 

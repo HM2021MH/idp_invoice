@@ -1,6 +1,7 @@
 "use client"
 
 import { BulkActionsMenu } from "@/components/transactions/bulk-actions"
+
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -11,6 +12,7 @@ import { formatDate } from "date-fns"
 import { ArrowDownIcon, ArrowUpIcon, File } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
+import { JsonViewer } from "./jsonViewer"
 
 type FieldRenderer = {
   name: string
@@ -113,10 +115,9 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     ),
     footerValue: (transactions: Transaction[]) => {
       const netTotalPerCurrency = calcNetTotalPerCurrency(transactions)
-
-      // Isolate only the income to calculate accurate turnover and then Calculate the final turnover.
-      const turnoverPerCurrency = calcTotalPerCurrency(transactions.filter((transaction) => transaction.type === 'income'))
-
+      const turnoverPerCurrency = calcTotalPerCurrency(
+        transactions.filter((transaction) => transaction.type === "income")
+      )
       return (
         <div className="flex flex-col gap-3 text-right">
           <dl className="space-y-1">
@@ -171,14 +172,37 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
 const getFieldRenderer = (field: Field): FieldRenderer => {
   if (standardFieldRenderers[field.code as keyof typeof standardFieldRenderers]) {
     return standardFieldRenderers[field.code as keyof typeof standardFieldRenderers]
-  } else {
-    return {
-      name: field.name,
-      code: field.code,
-      classes: "",
-      sortable: false,
+  }
+  return {
+    name: field.name,
+    code: field.code,
+    classes: "",
+    sortable: false,
+  }
+}
+
+function resolveFieldValue(transaction: Transaction, field: FieldWithRenderer): React.ReactNode {
+  if (field.renderer.formatValue) {
+    return field.renderer.formatValue(transaction)
+  }
+
+  const code = field.code
+
+  const extra = transaction.extra
+  if (extra && typeof extra === "object" && !Array.isArray(extra)) {
+    const extraVal = (extra as Record<string, unknown>)[code]
+    if (extraVal !== null && extraVal !== undefined && extraVal !== "") {
+      return String(extraVal)
     }
   }
+
+  const rootVal = transaction[code as keyof Transaction]
+  if (rootVal !== null && rootVal !== undefined) {
+    if (typeof rootVal === "object") return ""
+    return String(rootVal)
+  }
+
+  return ""
 }
 
 export function TransactionList({ transactions, fields = [] }: { transactions: Transaction[]; fields?: Field[] }) {
@@ -211,17 +235,15 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
     if (selectedIds.length === transactions.length) {
       setSelectedIds([])
     } else {
-      setSelectedIds(transactions.map((transaction) => transaction.id))
+      setSelectedIds(transactions.map((t) => t.id))
     }
   }
 
   const toggleOneRow = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    if (selectedIds.includes(id)) {
-      setSelectedIds(selectedIds.filter((item) => item !== id))
-    } else {
-      setSelectedIds([...selectedIds, id])
-    }
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    )
   }
 
   const handleRowClick = (id: string) => {
@@ -230,33 +252,17 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
 
   const handleSort = (field: string) => {
     let newDirection: "asc" | "desc" | null = "asc"
-
     if (sorting.field === field) {
       if (sorting.direction === "asc") newDirection = "desc"
       else if (sorting.direction === "desc") newDirection = null
     }
-
-    setSorting({
-      field: newDirection ? field : null,
-      direction: newDirection,
-    })
-  }
-
-  const renderFieldInTable = (transaction: Transaction, field: FieldWithRenderer): string | React.ReactNode => {
-    if (field.isExtra) {
-      return transaction.extra?.[field.code as keyof typeof transaction.extra] ?? ""
-    } else if (field.renderer.formatValue) {
-      return field.renderer.formatValue(transaction)
-    } else {
-      return String(transaction[field.code as keyof Transaction])
-    }
+    setSorting({ field: newDirection ? field : null, direction: newDirection })
   }
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
     if (sorting.field && sorting.direction) {
-      const ordering = sorting.direction === "desc" ? `-${sorting.field}` : sorting.field
-      params.set("ordering", ordering)
+      params.set("ordering", sorting.direction === "desc" ? `-${sorting.field}` : sorting.field)
     } else {
       params.delete("ordering")
     }
@@ -293,6 +299,8 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
                 {field.renderer.sortable && getSortIcon(field.code)}
               </TableHead>
             ))}
+            {/* JSON data column header — no label, just a narrow slot */}
+            <TableHead className="w-[40px]" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -318,20 +326,32 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
               </TableCell>
               {visibleFields.map((field) => (
                 <TableCell key={field.code} className={field.renderer.classes}>
-                  {renderFieldInTable(transaction, field)}
+                  {resolveFieldValue(transaction, field)}
                 </TableCell>
               ))}
+              {/* JSON viewer button — stopPropagation so it doesn't navigate */}
+              <TableCell
+                className="w-[40px] p-1 text-center"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <JsonViewer
+                    data={(transaction as any).data}
+                    label={transaction.name ?? "Transaction Data"}
+                  />
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
         <TableFooter>
           <TableRow>
-            <TableCell></TableCell>
+            <TableCell />
             {visibleFields.map((field) => (
               <TableCell key={field.code} className={field.renderer.classes}>
                 {field.renderer.footerValue ? field.renderer.footerValue(transactions) : ""}
               </TableCell>
             ))}
+            {/* Empty footer cell to match the extra column */}
+            <TableCell />
           </TableRow>
         </TableFooter>
       </Table>

@@ -20,13 +20,27 @@ export const loadAttachmentsForAI = async (user: User, file: File): Promise<Anal
 
   const { contentType, previews } = await generateFilePreviews(user, fullFilePath, file.mimetype)
 
-  return Promise.all(
-    previews.slice(0, MAX_PAGES_TO_ANALYZE).map(async (preview) => ({
-      filename: file.filename,
-      contentType: contentType,
-      base64: await loadFileAsBase64(preview),
-    }))
-  )
+  try {
+    return await Promise.all(
+      previews.slice(0, MAX_PAGES_TO_ANALYZE).map(async (preview) => ({
+        filename: file.filename,
+        contentType: contentType,
+        base64: await loadFileAsBase64(preview),
+      }))
+    )
+  } finally {
+    // ✅ Clean up temp preview files after reading so their handles are
+    // released before the caller renames the original file (EBUSY fix).
+    // We skip deletion if the preview IS the original file (non-image/pdf path).
+    await Promise.allSettled(
+      previews.map((preview) => {
+        if (preview !== fullFilePath) {
+          return fs.unlink(preview).catch(() => {})
+        }
+        return Promise.resolve()
+      })
+    )
+  }
 }
 
 export const loadFileAsBase64 = async (filePath: string): Promise<string> => {

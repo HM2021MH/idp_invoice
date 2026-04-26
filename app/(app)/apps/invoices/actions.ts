@@ -83,7 +83,7 @@ export async function saveInvoiceAsTransactionAction(
       categoryCode: null,
       projectCode: null,
       type: "income",
-      status: "pending",
+      //status: "pending",
     }
 
     // --- Deduplication Check ---

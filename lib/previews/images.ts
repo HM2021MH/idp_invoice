@@ -29,13 +29,18 @@ export async function resizeImage(
       }
     }
 
-    await sharp(origFilePath)
+    // ✅ Read into buffer first so Sharp never holds an open handle on
+    // origFilePath — this prevents EBUSY when the caller later renames
+    // the original file (critical on Windows).
+    const inputBuffer = await fs.readFile(origFilePath)
+
+    await sharp(inputBuffer)
       .rotate()
       .resize(maxWidth, maxHeight, {
         fit: "inside",
         withoutEnlargement: true,
       })
-      .webp({ quality: quality })
+      .webp({ quality })
       .toFile(outputPath)
 
     return {

@@ -2,6 +2,8 @@ import { ColoredText } from "@/components/ui/colored-text"
 import config from "@/lib/config"
 import Image from "next/image"
 import Link from "next/link"
+import { selfHostedGetStartedAction } from "../(auth)/actions"
+
 
 export default function LandingPage() {
   return (
@@ -11,7 +13,7 @@ export default function LandingPage() {
           <Link href="/" className="flex items-center gap-2 group">
             <div className="relative">
               <Image
-                src="/logo/256.png"
+                src="/logo/ensias.jpg"
                 alt="Logo"
                 width={32}
                 height={32}
@@ -19,14 +21,19 @@ export default function LandingPage() {
               />
               <div className="absolute inset-0 bg-gradient-to-r from-pink-600 to-indigo-600 rounded-full opacity-20 blur-md group-hover:opacity-40 transition-opacity duration-300" />
             </div>
-            <ColoredText className="text-2xl font-bold">TaxHacker</ColoredText>
+            <ColoredText className="text-2xl font-bold">Invoice IDP</ColoredText>
           </Link>
-          <Link
-            href="/enter"
-            className="cursor-pointer font-medium px-4 py-2 rounded-full border-2 border-gradient-to-r from-pink-300 to-indigo-300 hover:from-pink-400 hover:to-indigo-400 bg-white/80 hover:bg-white transition-all duration-300 hover:scale-105 text-xs md:text-sm"
-          >
-            Log In
-          </Link>
+          <div className="flex items-center gap-3">
+            <form action={selfHostedGetStartedAction}>
+              <button
+                type="submit"
+                className="cursor-pointer font-bold px-5 py-2 rounded-full bg-gradient-to-r from-pink-600 to-indigo-600 text-white hover:from-pink-700 hover:to-indigo-700 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl text-xs md:text-sm"
+              >
+                Get Started ✨
+              </button>
+            </form>
+           
+          </div>
         </div>
       </header>
 
@@ -43,18 +50,22 @@ export default function LandingPage() {
               🚀 Under Active Development
             </div>
             <h1 className="text-5xl font-bold tracking-tight sm:text-6xl mb-6 bg-gradient-to-r from-gray-900 via-pink-700 to-indigo-700 bg-clip-text text-transparent pb-2">
-              Let AI finally care about your taxes, scan your receipts and analyze your expenses
+              Let AI finally care about your data, scan your invoices and analyze your expenses
             </h1>
             <p className="text-xl text-gray-700 mb-8 max-w-2xl mx-auto font-medium">
-              Self-hosted accounting app crafted for freelancers, indie-hackers and small businesses
+              -hosted accounting app crafted for freelancers, indie-hackers and small businesses
             </p>
             <div className="flex gap-4 justify-center text-sm md:text-lg">
-              <Link
-                href="#start"
+
+              <form action={selfHostedGetStartedAction}>
+              <button
+                type="submit"
                 className="px-8 py-4 bg-gradient-to-r from-pink-600 to-indigo-600 text-white font-bold rounded-full hover:from-pink-700 hover:to-indigo-700 transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-110 border-2 border-white/20"
               >
                 Get Started ✨
-              </Link>
+              </button>
+            </form>
+            
               <Link
                 href="mailto:me@vas3k.com"
                 className="px-8 py-4 border-2 border-gradient-to-r from-pink-300 to-indigo-300 text-gray-800 font-bold rounded-full hover:bg-gradient-to-r hover:from-pink-50 hover:to-indigo-50 transition-all duration-300 hover:scale-105 bg-white/80"
@@ -80,10 +91,10 @@ export default function LandingPage() {
           <div className="text-center mb-16">
             <h2 className="flex flex-col gap-3 mb-4">
               <span className="text-6xl font-bold bg-gradient-to-r from-pink-600 to-indigo-600 bg-clip-text text-transparent">
-                F∗ck Taxes
+                Process invoices in seconds, not hours
               </span>
               <span className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                TaxHacker saves you time, money and nerves
+                Save you time, money and nerves
               </span>
             </h2>
           </div>
@@ -94,7 +105,7 @@ export default function LandingPage() {
               <div className="inline-block px-4 py-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-bold mb-4 shadow-lg">
                 🤖 LLM-Powered
               </div>
-              <h3 className="text-2xl font-bold mb-4 bg-gradient-to-r from-blue-700 to-indigo-700 bg-clip-text text-transparent">
+              <h3 className="text-2xl font-boldSelf mb-4 bg-gradient-to-r from-blue-700 to-indigo-700 bg-clip-text text-transparent">
                 Analyze photos and invoices with AI
               </h3>
               <ul className="space-y-3 text-gray-700">

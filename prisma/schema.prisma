@@ -191,7 +191,7 @@ model Transaction {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
   text                  String?
-
+  data                  Json @default("{}")
   @@index([userId])
   @@index([projectCode])
   @@index([categoryCode])

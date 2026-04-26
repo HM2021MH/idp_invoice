@@ -4,7 +4,6 @@ import { TransactionSearchAndFilters } from "@/components/transactions/filters"
 import { TransactionList } from "@/components/transactions/list"
 import { NewTransactionDialog } from "@/components/transactions/new"
 import { Pagination } from "@/components/transactions/pagination"
-import { Button } from "@/components/ui/button"
 import { getCurrentUser } from "@/lib/auth"
 import { getCategories } from "@/models/categories"
 import { getFields } from "@/models/fields"
@@ -32,7 +31,6 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const projects = await getProjects(user.id)
   const fields = await getFields(user.id)
 
-  // Reset page if user clicks a filter and no transactions are found
   if (page && page > 1 && transactions.length === 0) {
     const params = new URLSearchParams(filters as Record<string, string>)
     redirect(`?${params.toString()}`)
@@ -49,9 +47,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
           <ExportTransactionsDialog fields={fields} categories={categories} projects={projects} total={total}>
             <Download /> <span className="hidden md:block">Export</span>
           </ExportTransactionsDialog>
-          <NewTransactionDialog>
-            <Plus /> <span className="hidden md:block">Add Transaction</span>
-          </NewTransactionDialog>
+          <NewTransactionDialog />
         </div>
       </header>
 
@@ -71,12 +67,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
               <UploadButton>
                 <Upload /> Analyze New Invoice
               </UploadButton>
-              <NewTransactionDialog>
-                <Button>
-                  <Plus />
-                  Add Manually
-                </Button>
-              </NewTransactionDialog>
+              <NewTransactionDialog />
             </div>
           </div>
         )}

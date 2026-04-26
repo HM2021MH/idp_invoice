@@ -6,10 +6,17 @@ CREATE TABLE "users" (
     "avatar" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
+    "stripe_customer_id" TEXT,
     "membership_plan" TEXT,
     "membership_expires_at" TIMESTAMP(3),
     "is_email_verified" BOOLEAN NOT NULL DEFAULT false,
-    "image" TEXT,
+    "storage_used" INTEGER NOT NULL DEFAULT 0,
+    "storage_limit" INTEGER NOT NULL DEFAULT -1,
+    "ai_balance" INTEGER NOT NULL DEFAULT 0,
+    "business_name" TEXT,
+    "business_address" TEXT,
+    "business_bank_details" TEXT,
+    "business_logo" TEXT,
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
@@ -124,6 +131,8 @@ CREATE TABLE "files" (
     "mimetype" TEXT NOT NULL,
     "metadata" JSONB,
     "is_reviewed" BOOLEAN NOT NULL DEFAULT false,
+    "is_splitted" BOOLEAN NOT NULL DEFAULT false,
+    "cached_parse_result" JSONB,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "files_pkey" PRIMARY KEY ("id")
@@ -141,6 +150,7 @@ CREATE TABLE "transactions" (
     "converted_total" INTEGER,
     "converted_currency_code" TEXT,
     "type" TEXT DEFAULT 'expense',
+    "items" JSONB NOT NULL DEFAULT '[]',
     "note" TEXT,
     "files" JSONB NOT NULL DEFAULT '[]',
     "extra" JSONB,
@@ -150,6 +160,7 @@ CREATE TABLE "transactions" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "text" TEXT,
+    "data" JSONB NOT NULL DEFAULT '{}',
 
     CONSTRAINT "transactions_pkey" PRIMARY KEY ("id")
 );
@@ -162,6 +173,29 @@ CREATE TABLE "currencies" (
     "name" TEXT NOT NULL,
 
     CONSTRAINT "currencies_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "app_data" (
+    "id" UUID NOT NULL,
+    "app" TEXT NOT NULL,
+    "user_id" UUID NOT NULL,
+    "data" JSONB NOT NULL,
+
+    CONSTRAINT "app_data_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "progress" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "type" TEXT NOT NULL,
+    "data" JSONB,
+    "current" INTEGER NOT NULL DEFAULT 0,
+    "total" INTEGER NOT NULL DEFAULT 0,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "progress_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -206,6 +240,12 @@ CREATE INDEX "transactions_total_idx" ON "transactions"("total");
 -- CreateIndex
 CREATE UNIQUE INDEX "currencies_user_id_code_key" ON "currencies"("user_id", "code");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "app_data_user_id_app_key" ON "app_data"("user_id", "app");
+
+-- CreateIndex
+CREATE INDEX "progress_user_id_idx" ON "progress"("user_id");
+
 -- AddForeignKey
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -238,3 +278,9 @@ ALTER TABLE "transactions" ADD CONSTRAINT "transactions_project_code_user_id_fke
 
 -- AddForeignKey
 ALTER TABLE "currencies" ADD CONSTRAINT "currencies_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "app_data" ADD CONSTRAINT "app_data_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "progress" ADD CONSTRAINT "progress_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

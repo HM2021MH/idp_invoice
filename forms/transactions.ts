@@ -10,7 +10,7 @@ export const transactionFormSchema = z
       .string()
       .optional()
       .transform((val) => {
-        if (!val || val.trim() === '') return null
+        if (!val || val.trim() === "") return null
         const num = parseFloat(val)
         if (isNaN(num)) {
           throw new z.ZodError([{ message: "Invalid total", path: ["total"], code: z.ZodIssueCode.custom }])
@@ -22,11 +22,11 @@ export const transactionFormSchema = z
       .string()
       .optional()
       .transform((val) => {
-        if (!val || val.trim() === '') return null
+        if (!val || val.trim() === "") return null
         const num = parseFloat(val)
         if (isNaN(num)) {
           throw new z.ZodError([
-            { message: "Invalid coverted total", path: ["convertedTotal"], code: z.ZodIssueCode.custom },
+            { message: "Invalid converted total", path: ["convertedTotal"], code: z.ZodIssueCode.custom },
           ])
         }
         return Math.round(num * 100) // convert to cents
@@ -47,16 +47,15 @@ export const transactionFormSchema = z
       .optional(),
     text: z.string().optional(),
     note: z.string().optional(),
+    // ✅ Accept either a JSON string (from FormData) or an already-parsed array
+    // (when called programmatically). Both normalise to an array.
     items: z
-      .string()
-      .optional()
-      .transform((val) => {
-        if (!val || val.trim() === '') return []
-        try {
-          return JSON.parse(val)
-        } catch (e) {
-          throw new z.ZodError([{ message: "Invalid items JSON", path: ["items"], code: z.ZodIssueCode.custom }])
+      .preprocess((val) => {
+        if (Array.isArray(val)) return val
+        if (typeof val === "string" && val.trim() !== "") {
+          try { return JSON.parse(val) } catch { return [] }
         }
-      }),
+        return []
+      }, z.array(z.any()).default([])),
   })
   .catchall(z.string())

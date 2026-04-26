@@ -1,7 +1,18 @@
 import { X } from "lucide-react"
 import Link from "next/link"
+import { getSelfHostedUser } from "@/models/users"
+import { redirect } from "next/navigation"
+import config from "@/lib/config"
+import LandingPage from "@/app/landing/landing"
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+export default async function AuthLayout({ children }: { children: React.ReactNode }) {
+  if (config.selfHosted.isEnabled) {
+    const user = await getSelfHostedUser()
+    if (!user) {
+      return <LandingPage />
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col relative">
       <Link
@@ -16,5 +27,3 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     </div>
   )
 }
-
-export const dynamic = "force-dynamic"

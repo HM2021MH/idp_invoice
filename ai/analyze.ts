@@ -6,7 +6,7 @@ import { AnalyzeAttachment } from "./attachments"
 import { requestLLM } from "./providers/llmProvider"
 
 export type AnalysisResult = {
-  output: Record<string, string>
+  output: Record<string, unknown>
   tokensUsed: number
 }
 
@@ -18,8 +18,11 @@ export async function analyzeTransaction(
   userId: string
 ): Promise<ActionState<AnalysisResult>> {
   try {
+    //console.log("Analyzing transaction with prompt:", prompt)
+    //console.log("Using schema:", schema)
+    //console.log("With attachments:", attachments)
     const response = await requestLLM({ prompt, schema, attachments })
-
+    console.log("LLM response:", response)
     if (response.error) throw new Error(response.error)
 
     await updateFile(fileId, userId, { cachedParseResult: response.output })

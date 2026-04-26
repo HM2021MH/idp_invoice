@@ -6,9 +6,8 @@ import Image from "next/image"
 import { redirect } from "next/navigation"
 
 export default async function LoginPage() {
-  if (config.selfHosted.isEnabled) {
-    redirect(config.selfHosted.redirectUrl)
-  }
+    redirect(config.selfHosted.welcomeUrl)
+  
 
   return (
     <Card className="w-full max-w-xl mx-auto p-8 flex flex-col items-center justify-center gap-4">

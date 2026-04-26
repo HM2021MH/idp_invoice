@@ -29,55 +29,7 @@ export default function SelfHostedSetupFormClient({ defaultProvider, defaultApiK
   }, [provider, getDefaultApiKey])
 
   return (
-    <form action={selfHostedGetStartedAction} className="flex flex-col gap-8 pt-8">
-      <div className="flex flex-row gap-4 items-center justify-center">
-        <FormSelect
-          title="LLM provider"
-          name="provider"
-          value={provider}
-          onValueChange={setProvider}
-          items={PROVIDERS.map(p => ({
-            code: p.key,
-            name: p.label,
-            logo: p.logo
-          }))}
-        />
-        <FormSelectCurrency
-          title="Default Currency"
-          name="default_currency"
-          defaultValue={DEFAULT_SETTINGS.find((s) => s.code === "default_currency")?.value ?? "EUR"}
-          currencies={DEFAULT_CURRENCIES}
-        />
-      </div>
-      <div>
-        <FormInput
-          title={`${selected.label} API Key`}
-          name={selected.apiKeyName}
-          value={apiKey ?? ""}
-          onChange={e => {
-            setApiKey(e.target.value)
-            userTyped.current = true
-          }}
-          placeholder={selected.placeholder}
-        />
-        <small className="text-xs text-muted-foreground flex justify-center mt-2">
-          Get key from
-          {"\u00A0"}
-          <a href={selected.help.url} target="_blank" className="underline">
-            {selected.help.label}
-          </a>
-        </small>
-      </div>
-      {selected.baseUrlName && (
-        <div>
-          <FormInput
-            title={`${selected.label} Base URL`}
-            name={selected.baseUrlName}
-            defaultValue={selected.defaultBaseUrl}
-            placeholder="http://localhost:11434/v1"
-          />
-        </div>
-      )}
+    <form action={selfHostedGetStartedAction}>
       <Button type="submit" className="w-auto p-6">
         Get Started
       </Button>

@@ -15,7 +15,7 @@ echo "PostgreSQL server is ready!"
 # Run database migrations
 echo "Running database migrations..."
 npx prisma generate
-npx prisma migrate deploy
+npx prisma migrate deploy || true
 
 # Start the application
 echo "Starting the application..."

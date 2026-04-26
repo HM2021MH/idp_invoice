@@ -1,7 +1,11 @@
 "use client"
 
 import { useNotification } from "@/app/(app)/context"
-import { analyzeFileAction, deleteUnsortedFileAction, saveFileAsTransactionAction } from "@/app/(app)/unsorted/actions"
+import {
+  analyzeFileAction,
+  deleteUnsortedFileAction,
+  saveFileAsTransactionAction,
+} from "@/app/(app)/unsorted/actions"
 import { CurrencyConverterTool } from "@/components/agents/currency-converter"
 import { ItemsDetectTool } from "@/components/agents/items-detect"
 import ToolWindow from "@/components/agents/tool-window"
@@ -13,14 +17,69 @@ import { FormSelectType } from "@/components/forms/select-type"
 import { FormInput, FormTextarea } from "@/components/forms/simple"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Category, Currency, Field, File, Project } from "@/prisma/client"
-import { format } from "date-fns"
-import { ArrowDownToLine, Brain, Loader2, Trash2 } from "lucide-react"
-import { startTransition, useActionState, useMemo, useState } from "react"
-import { DuplicateModal } from "../transactions/duplicate-modal"
 import { ActionState } from "@/lib/actions"
-import { Transaction } from "@/prisma/client"
+import { Category, Currency, Field, File, Project, Transaction } from "@/prisma/client"
+import { ArrowDownToLine, Brain, ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react"
+import { startTransition, useActionState, useMemo, useState } from "react"
 import { deleteTransactionAction } from "@/app/(app)/transactions/actions"
+import { DuplicateModal } from "../transactions/duplicate-modal"
+import { EditableJsonPanel } from "@/app/(app)/transactions/editable-json-panel"
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function isEmpty(value: any): boolean {
+  if (value === null || value === undefined || value === "") return true
+  if (Array.isArray(value) && value.length === 0) return true
+  return false
+}
+
+// ── Collapsible section ───────────────────────────────────────────────────────
+
+function CollapsibleSection({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string
+  children: React.ReactNode
+  defaultOpen?: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="border border-border rounded-md mb-2">
+      <button
+        type="button"
+        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-left"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>{title}</span>
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-1 space-y-4 border-t border-border">{children}</div>
+      )}
+    </div>
+  )
+}
+
+// ── Section groups config ─────────────────────────────────────────────────────
+
+const SECTION_GROUPS: { title: string; codes: string[] }[] = [
+  { title: "Basic info", codes: ["name", "type", "issuedAt", "categoryCode", "projectCode"] },
+  { title: "Amounts",    codes: ["total", "currencyCode", "convertedTotal"] },
+  { title: "Details",   codes: ["text"] },
+]
+
+const GROUPED_CODES = new Set(SECTION_GROUPS.flatMap((g) => g.codes))
+
+// ── Noop save for the panel in the analyze form (data not persisted yet) ──────
+// The panel is purely for review/editing before the transaction is created.
+// We update formData in-memory; the hidden <input name="data"> picks it up on submit.
+async function noopSave(_id: string, _json: string) {
+  return { success: true }
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function AnalyzeForm({
   file,
@@ -38,121 +97,72 @@ export default function AnalyzeForm({
   settings: Record<string, string>
 }) {
   const { showNotification } = useNotification()
+
+  const [hasAnalyzed, setHasAnalyzed] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [analyzeStep, setAnalyzeStep] = useState<string>("")
-  const [analyzeError, setAnalyzeError] = useState<string>("")
-  const [deleteState, deleteAction, isDeleting] = useActionState(deleteUnsortedFileAction, null)
+  const [analyzeError, setAnalyzeError] = useState("")
+  const [deleteState, deleteAction] = useActionState(deleteUnsortedFileAction, null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState("")
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false)
-  const [duplicateData, setDuplicateData] = useState<ActionState<Transaction>["duplicateData"] | null>(null)
+  const [duplicateData, setDuplicateData] =
+    useState<ActionState<Transaction>["duplicateData"] | null>(null)
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null)
 
-  const fieldMap = useMemo(() => {
-    return fields.reduce(
-      (acc, field) => {
-        acc[field.code] = field
-        return acc
-      },
-      {} as Record<string, Field>
-    )
-  }, [fields])
+  const initialFormState: Record<string, any> = useMemo(() => {
+    const dynamicState = fields.reduce<Record<string, any>>((acc, field) => {
+      acc[field.code] = ""
+      return acc
+    }, {})
 
-  const extraFields = useMemo(() => fields.filter((field) => field.isExtra), [fields])
-  const initialFormState = useMemo(() => {
-    const baseState = {
-      name: file.filename,
-      merchant: "",
-      description: "",
-      type: settings.default_type,
-      total: 0.0,
-      currencyCode: settings.default_currency,
-      convertedTotal: 0.0,
-      convertedCurrencyCode: settings.default_currency,
-      categoryCode: settings.default_category,
-      projectCode: settings.default_project,
-      issuedAt: "",
-      note: "",
-      text: "",
-      items: [],
-    }
-
-    // Add extra fields
-    const extraFieldsState = extraFields.reduce(
-      (acc, field) => {
-        acc[field.code] = ""
-        return acc
-      },
-      {} as Record<string, string>
-    )
-
-    // Load cached results if they exist
     const cachedResults = file.cachedParseResult
       ? Object.fromEntries(
-          Object.entries(file.cachedParseResult as Record<string, string>).filter(
-            ([_, value]) => value !== null && value !== undefined && value !== ""
+          Object.entries(file.cachedParseResult as Record<string, any>).filter(
+            ([_, v]) => v !== null && v !== ""
           )
         )
       : {}
 
     return {
-      ...baseState,
-      ...extraFieldsState,
+      ...dynamicState,
       ...cachedResults,
+      name: file.filename,
+      currencyCode: settings.default_currency,
+      type: settings.default_type,
+      categoryCode: settings.default_category,
+      projectCode: settings.default_project,
+      items: [],
     }
-  }, [file.filename, settings, extraFields, file.cachedParseResult])
-  const [formData, setFormData] = useState(initialFormState)
+  }, [fields, file, settings])
 
-  async function saveAsTransaction(formData: FormData) {
+  const [formData, setFormData] = useState<Record<string, any>>(initialFormState)
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  async function saveAsTransaction(data: FormData) {
     setSaveError("")
     setIsSaving(true)
     startTransition(async () => {
-      const result = await saveFileAsTransactionAction(null, formData)
+      const result = await saveFileAsTransactionAction(null, data)
       setIsSaving(false)
-
       if (result.success) {
         showNotification({ code: "global.banner", message: "Saved!", type: "success" })
-        showNotification({ code: "sidebar.transactions", message: "new" })
-        setTimeout(() => showNotification({ code: "sidebar.transactions", message: "" }), 3000)
       } else if (result.error === "DUPLICATE_FOUND" && result.duplicateData) {
         setDuplicateData(result.duplicateData)
-        setPendingFormData(formData) // Save the form data so we can retry later
+        setPendingFormData(data)
         setIsDuplicateModalOpen(true)
       } else {
-        setSaveError(result.error ? result.error : "Something went wrong...")
-        showNotification({ code: "global.banner", message: "Failed to save", type: "failed" })
+        setSaveError(result.error || "Something went wrong...")
       }
     })
   }
 
-  const handleForceSave = () => {
-    if (!pendingFormData) return
-
-    setIsDuplicateModalOpen(false)
-
-    const newFormData = new FormData()
-    for (const [key, value] of pendingFormData.entries()) {
-      newFormData.append(key, value)
-    }
-    newFormData.append("forceSave", "true")
-
-    saveAsTransaction(newFormData)
-  }
-
-  const handleCancelDuplicate = () => {
-    setIsDuplicateModalOpen(false)
-    setPendingFormData(null)
-    setDuplicateData(null)
-  }
   const handleReplaceOld = async () => {
     if (!duplicateData || !pendingFormData) return
-
     setIsDuplicateModalOpen(false)
     setIsSaving(true)
-
     try {
       await deleteTransactionAction(null, duplicateData.existingTransaction.id)
-
       await saveAsTransaction(pendingFormData)
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Failed to replace transaction")
@@ -165,247 +175,207 @@ export default function AnalyzeForm({
     setIsAnalyzing(true)
     setAnalyzeError("")
     try {
-      setAnalyzeStep("Analyzing...")
       const results = await analyzeFileAction(file, settings, fields, categories, projects)
-
-      console.log("Analysis results:", results)
-
       if (!results.success) {
-        setAnalyzeError(results.error ? results.error : "Something went wrong...")
+        setAnalyzeError(results.error || "Something went wrong...")
       } else {
-        const nonEmptyFields = Object.fromEntries(
-          Object.entries(results.data?.output || {}).filter(
-            ([_, value]) => value !== null && value !== undefined && value !== ""
-          )
+        const cleaned = Object.fromEntries(
+          Object.entries(results.data?.output || {}).filter(([_, v]) => v !== null && v !== "")
         )
-        setFormData({ ...formData, ...nonEmptyFields })
+        setFormData((prev) => ({ ...prev, ...cleaned }))
+        setHasAnalyzed(true) // ← reveal the JSON panel
       }
-    } catch (error) {
-      console.error("Analysis failed:", error)
-      setAnalyzeError(error instanceof Error ? error.message : "Analysis failed")
+    } catch {
+      setAnalyzeError("Analysis failed")
     } finally {
       setIsAnalyzing(false)
-      setAnalyzeStep("")
     }
   }
 
+  // ── Field renderer ────────────────────────────────────────────────────────
+
+  const renderField = (field: Field) => {
+    if (!field.isVisibleInAnalysis) return null
+    const value = formData[field.code]
+    if (isEmpty(value)) return null
+
+    switch (field.code) {
+      case "currencyCode":
+        return (
+          <FormSelectCurrency key={field.code} title={field.name} currencies={currencies}
+            name={field.code} value={value}
+            onValueChange={(v) => setFormData((p) => ({ ...p, [field.code]: v }))} />
+        )
+      case "categoryCode":
+        return (
+          <FormSelectCategory key={field.code} title={field.name} categories={categories}
+            name={field.code} value={value}
+            onValueChange={(v) => setFormData((p) => ({ ...p, [field.code]: v }))} />
+        )
+      case "projectCode":
+        return (
+          <FormSelectProject key={field.code} title={field.name} projects={projects}
+            name={field.code} value={value}
+            onValueChange={(v) => setFormData((p) => ({ ...p, [field.code]: v }))} />
+        )
+      case "type":
+        return (
+          <FormSelectType key={field.code} title={field.name} name={field.code} value={value}
+            onValueChange={(v) => setFormData((p) => ({ ...p, [field.code]: v }))} />
+        )
+      case "issuedAt":
+        return (
+          <FormInput key={field.code} type="date" title={field.name} name={field.code}
+            value={value || ""}
+            onChange={(e) => setFormData((p) => ({ ...p, [field.code]: e.target.value }))} />
+        )
+      case "text":
+        return (
+          <FormTextarea key={field.code} title={field.name} name={field.code} value={value || ""}
+            onChange={(e) => setFormData((p) => ({ ...p, [field.code]: e.target.value }))} />
+        )
+    }
+
+    if (field.type === "number") {
+      return (
+        <FormInput key={field.code} type="number" step="0.01" title={field.name}
+          name={field.code} value={value || ""}
+          onChange={(e) => {
+            const num = parseFloat(e.target.value || "0")
+            if (!isNaN(num)) setFormData((p) => ({ ...p, [field.code]: num }))
+          }} />
+      )
+    }
+
+    return (
+      <FormInput key={field.code} title={field.name} name={field.code} value={value || ""}
+        onChange={(e) => setFormData((p) => ({ ...p, [field.code]: e.target.value }))} />
+    )
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const otherFields = fields.filter((f) => !GROUPED_CODES.has(f.code) && f.isVisibleInAnalysis)
+
   return (
     <>
-      {file.isSplitted ? (
-        <div className="flex justify-end">
+      {/* ── Analyze button ── */}
+      {!file.isSplitted ? (
+        <Button className="w-full mb-6 py-6 text-lg" onClick={startAnalyze} disabled={isAnalyzing}>
+          {isAnalyzing ? <Loader2 className="animate-spin" /> : <Brain />}
+          Analyze with AI
+        </Button>
+      ) : (
+        <div className="flex justify-end mb-4">
           <Badge variant="outline">This file has been split up</Badge>
         </div>
-      ) : (
-        <Button className="w-full mb-6 py-6 text-lg" onClick={startAnalyze} disabled={isAnalyzing} data-analyze-button>
-          {isAnalyzing ? (
-            <>
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-              <span>{analyzeStep}</span>
-            </>
-          ) : (
-            <>
-              <Brain className="mr-1 h-4 w-4" />
-              <span>Analyze with AI</span>
-            </>
-          )}
-        </Button>
       )}
 
-      <div>{analyzeError && <FormError>{analyzeError}</FormError>}</div>
+      {analyzeError && <FormError>{analyzeError}</FormError>}
 
-      <form className="space-y-4" action={saveAsTransaction}>
+      {/* ── Form ── */}
+      <form action={saveAsTransaction} className="space-y-2">
         <input type="hidden" name="fileId" value={file.id} />
-        <FormInput
-          title={fieldMap.name.name}
-          name="name"
-          value={formData.name}
-          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-          required={fieldMap.name.isRequired}
-        />
+        {/* Always kept in sync with formData so save picks up edits from the JSON panel too */}
+        <input type="hidden" name="data" value={JSON.stringify(formData)} />
 
-        <FormInput
-          title={fieldMap.merchant.name}
-          name="merchant"
-          value={formData.merchant}
-          onChange={(e) => setFormData((prev) => ({ ...prev, merchant: e.target.value }))}
-          hideIfEmpty={!fieldMap.merchant.isVisibleInAnalysis}
-          required={fieldMap.merchant.isRequired}
-        />
+        {/* Sections */}
+        {SECTION_GROUPS.map(({ title, codes }) => {
+          const sectionFields = fields.filter((f) => codes.includes(f.code))
+          const renderedFields = sectionFields.map(renderField).filter(Boolean)
+          if (renderedFields.length === 0) return null
+          return (
+            <CollapsibleSection key={title} title={title}>
+              {renderedFields}
+            </CollapsibleSection>
+          )
+        })}
 
-        <FormInput
-          title={fieldMap.description.name}
-          name="description"
-          value={formData.description}
-          onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-          hideIfEmpty={!fieldMap.description.isVisibleInAnalysis}
-          required={fieldMap.description.isRequired}
-        />
+        {/* Other */}
+        {(() => {
+          const renderedOther = otherFields.map(renderField).filter(Boolean)
+          if (renderedOther.length === 0) return null
+          return (
+            <CollapsibleSection title="Other" defaultOpen={false}>
+              {renderedOther}
+            </CollapsibleSection>
+          )
+        })()}
 
-        <div className="flex flex-wrap gap-4">
-          <FormInput
-            title={fieldMap.total.name}
-            name="total"
-            type="number"
-            step="0.01"
-            value={formData.total || ""}
-            onChange={(e) => {
-              const newValue = parseFloat(e.target.value || "0")
-              if (!isNaN(newValue)) {
-                setFormData((prev) => ({ ...prev, total: newValue }))
-              }
-            }}
-            className="w-32"
-            required={fieldMap.total.isRequired}
-          />
-
-          <FormSelectCurrency
-            title={fieldMap.currencyCode.name}
-            currencies={currencies}
-            name="currencyCode"
-            value={formData.currencyCode}
-            onValueChange={(value) => setFormData((prev) => ({ ...prev, currencyCode: value }))}
-            hideIfEmpty={!fieldMap.currencyCode.isVisibleInAnalysis}
-            required={fieldMap.currencyCode.isRequired}
-          />
-
-          <FormSelectType
-            title={fieldMap.type.name}
-            name="type"
-            value={formData.type}
-            onValueChange={(value) => setFormData((prev) => ({ ...prev, type: value }))}
-            hideIfEmpty={!fieldMap.type.isVisibleInAnalysis}
-            required={fieldMap.type.isRequired}
-          />
-        </div>
-
-        {formData.total != 0 && formData.currencyCode && formData.currencyCode !== settings.default_currency && (
-          <ToolWindow title={`Exchange rate on ${format(new Date(formData.issuedAt || Date.now()), "LLLL dd, yyyy")}`}>
-            <CurrencyConverterTool
-              originalTotal={formData.total}
-              originalCurrencyCode={formData.currencyCode}
-              targetCurrencyCode={settings.default_currency}
-              date={new Date(formData.issuedAt || Date.now())}
-              onChange={(value) => setFormData((prev) => ({ ...prev, convertedTotal: value }))}
-            />
-            <input type="hidden" name="convertedCurrencyCode" value={settings.default_currency} />
-          </ToolWindow>
-        )}
-
-        <div className="flex flex-row gap-4">
-          <FormInput
-            title={fieldMap.issuedAt.name}
-            type="date"
-            name="issuedAt"
-            value={formData.issuedAt}
-            onChange={(e) => setFormData((prev) => ({ ...prev, issuedAt: e.target.value }))}
-            hideIfEmpty={!fieldMap.issuedAt.isVisibleInAnalysis}
-            required={fieldMap.issuedAt.isRequired}
-          />
-        </div>
-
-        <div className="flex flex-row gap-4">
-          <FormSelectCategory
-            title={fieldMap.categoryCode.name}
-            categories={categories}
-            name="categoryCode"
-            value={formData.categoryCode}
-            onValueChange={(value) => setFormData((prev) => ({ ...prev, categoryCode: value }))}
-            placeholder="Select Category"
-            hideIfEmpty={!fieldMap.categoryCode.isVisibleInAnalysis}
-            required={fieldMap.categoryCode.isRequired}
-          />
-
-          {projects.length > 0 && (
-            <FormSelectProject
-              title={fieldMap.projectCode.name}
-              projects={projects}
-              name="projectCode"
-              value={formData.projectCode}
-              onValueChange={(value) => setFormData((prev) => ({ ...prev, projectCode: value }))}
-              placeholder="Select Project"
-              hideIfEmpty={!fieldMap.projectCode.isVisibleInAnalysis}
-              required={fieldMap.projectCode.isRequired}
-            />
+        {/* Currency converter */}
+        {formData.total &&
+          formData.currencyCode &&
+          formData.currencyCode !== settings.default_currency && (
+            <ToolWindow title="Currency Conversion">
+              <CurrencyConverterTool
+                originalTotal={formData.total}
+                originalCurrencyCode={formData.currencyCode}
+                targetCurrencyCode={settings.default_currency}
+                date={new Date(formData.issuedAt || Date.now())}
+                onChange={(v) => setFormData((p) => ({ ...p, convertedTotal: v }))}
+              />
+            </ToolWindow>
           )}
-        </div>
 
-        <FormInput
-          title={fieldMap.note.name}
-          name="note"
-          value={formData.note}
-          onChange={(e) => setFormData((prev) => ({ ...prev, note: e.target.value }))}
-          hideIfEmpty={!fieldMap.note.isVisibleInAnalysis}
-          required={fieldMap.note.isRequired}
-        />
-
-        {extraFields.map((field) => (
-          <FormInput
-            key={field.code}
-            type="text"
-            title={field.name}
-            name={field.code}
-            value={formData[field.code as keyof typeof formData]}
-            onChange={(e) => setFormData((prev) => ({ ...prev, [field.code]: e.target.value }))}
-            hideIfEmpty={!field.isVisibleInAnalysis}
-            required={field.isRequired}
-          />
-        ))}
-
-        {formData.items && formData.items.length > 0 && (
+        {/* Detected items */}
+        {formData.items?.length > 0 && (
           <ToolWindow title="Detected items">
             <ItemsDetectTool file={file} data={formData} />
           </ToolWindow>
         )}
 
-        <div className="hidden">
-          <input type="text" name="items" value={JSON.stringify(formData.items)} readOnly />
-          <FormTextarea
-            title={fieldMap.text.name}
-            name="text"
-            value={formData.text}
-            onChange={(e) => setFormData((prev) => ({ ...prev, text: e.target.value }))}
-            hideIfEmpty={!fieldMap.text.isVisibleInAnalysis}
-          />
-        </div>
+        <input type="hidden" name="items" value={JSON.stringify(formData.items)} />
 
-        <div className="flex justify-between gap-4 pt-6">
+        {/* ── Editable JSON panel — shown only after AI analysis ── */}
+        {hasAnalyzed && (
+          <CollapsibleSection title="AI Response (JSON)" defaultOpen={false}>
+            <EditableJsonPanel
+              transactionId={file.id}
+              initialData={JSON.stringify(formData)}
+              onSave={async (_id, json) => {
+                // Parse the edited JSON back into formData so the form stays in sync
+                try {
+                  const parsed = JSON.parse(json)
+                  setFormData((prev) => ({ ...prev, ...parsed }))
+                  return { success: true }
+                } catch (e) {
+                  return { success: false, error: (e as Error).message }
+                }
+              }}
+            />
+          </CollapsibleSection>
+        )}
+
+        {/* Actions */}
+        <div className="flex justify-between pt-6">
           <Button
             type="button"
-            onClick={() => startTransition(() => deleteAction(file.id))}
             variant="destructive"
-            disabled={isDeleting}
+            onClick={() => startTransition(() => deleteAction(file.id))}
           >
-            <Trash2 className="h-4 w-4" />
-            {isDeleting ? "⏳ Deleting..." : "Delete"}
+            <Trash2 />
           </Button>
-
-          <Button type="submit" disabled={isSaving} data-save-button>
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <ArrowDownToLine className="h-4 w-4" />
-                Save as Transaction
-              </>
-            )}
+          <Button type="submit" disabled={isSaving}>
+            {isSaving ? <Loader2 className="animate-spin" /> : <ArrowDownToLine />}
+            Save
           </Button>
         </div>
 
-        <div>
-          {deleteState?.error && <FormError>{deleteState.error}</FormError>}
-          {saveError && <FormError>{saveError}</FormError>}
-        </div>
+        {deleteState?.error && <FormError>{deleteState.error}</FormError>}
+        {saveError && <FormError>{saveError}</FormError>}
       </form>
+
       <DuplicateModal
         isOpen={isDuplicateModalOpen}
         onOpenChange={setIsDuplicateModalOpen}
         duplicateData={duplicateData}
-        onKeepBoth={handleForceSave} // This should trigger the action again with forceSave: true
+        onKeepBoth={() => {
+          if (!pendingFormData) return
+          pendingFormData.append("forceSave", "true")
+          saveAsTransaction(pendingFormData)
+        }}
         onReplaceOld={handleReplaceOld}
-        onCancel={handleCancelDuplicate} // This should just close the modal
+        onCancel={() => setIsDuplicateModalOpen(false)}
       />
     </>
   )

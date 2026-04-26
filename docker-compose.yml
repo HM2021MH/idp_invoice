@@ -1,13 +1,13 @@
 services:
   app:
-    build: .
+    build: . 
     ports:
       - "7331:7331"
     environment:
       - NODE_ENV=production
       - SELF_HOSTED_MODE=true
       - UPLOAD_PATH=/app/data/uploads
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/taxhacker
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/db_invoice
     volumes:
       - ./data:/app/data
     depends_on:
@@ -19,7 +19,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=taxhacker
+      - POSTGRES_DB=db_invoice
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     restart: unless-stopped
