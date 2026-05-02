@@ -1,0 +1,36 @@
+# ================================
+# Stage 1: Build the JAR
+# ================================
+FROM maven:3.9.6-eclipse-temurin-21 AS builder
+
+WORKDIR /app
+
+# Cache dependencies first
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+
+# Build the app
+COPY src ./src
+RUN mvn package -DskipTests -B
+
+# ================================
+# Stage 2: Runtime
+# ================================
+FROM eclipse-temurin:21-jre-jammy
+
+WORKDIR /app
+
+# Install Tesseract + English language pack
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify Tesseract is on PATH — build fails here if install went wrong
+RUN tesseract --version
+
+COPY --from=builder /app/target/*.jar app.jar
+
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "app.jar"]

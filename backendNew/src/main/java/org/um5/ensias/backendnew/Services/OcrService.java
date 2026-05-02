@@ -14,15 +14,25 @@ import java.io.IOException;
 public class OcrService {
 
     /**
-     * Extract text from image or PDF file
-     * For PDFs, only the first page is processed
-     * @param file The file to process (image or PDF)
-     * @return Extracted text
-     * @throws Exception if extraction fails
+     * Resolve tesseract binary path:
+     * - In Docker (Linux): just "tesseract" from PATH
+     * - On Windows dev machine: falls back to the default install path
+     */
+    private String getTesseractPath() {
+        // If running on Windows locally, use the full path
+        if (System.getProperty("os.name").toLowerCase().contains("win")) {
+            return "C:\\Program Files\\Tesseract-OCR\\tesseract.exe";
+        }
+        // Linux / Docker: tesseract is on PATH
+        return "tesseract";
+    }
+
+    /**
+     * Extract text from image or PDF file.
+     * For PDFs, only the first page is processed.
      */
     public String extractText(File file) throws Exception {
         String filename = file.getName().toLowerCase();
-
         if (filename.endsWith(".pdf")) {
             return extractTextFromPDFFirstPage(file);
         } else {
@@ -31,38 +41,34 @@ public class OcrService {
     }
 
     /**
-     * Extract text from image using Tesseract OCR
-     * @param imageFile The image file
-     * @return Extracted text
-     * @throws Exception if OCR fails
+     * Extract text from image using Tesseract OCR.
+     * Uses "stdout" as output so no temp .txt file is needed.
      */
     private String extractTextFromImage(File imageFile) throws Exception {
-        String tesseractPath = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe";
         ProcessBuilder pb = new ProcessBuilder(
-                tesseractPath,
+                getTesseractPath(),
                 imageFile.getAbsolutePath(),
                 "stdout",
                 "-l", "eng"
         );
 
+        pb.redirectErrorStream(false);
         Process process = pb.start();
+
         String result = new String(process.getInputStream().readAllBytes());
-        int exitCode = process.waitFor();
+        String error  = new String(process.getErrorStream().readAllBytes());
+        int exitCode  = process.waitFor();
 
         if (exitCode != 0) {
-            String error = new String(process.getErrorStream().readAllBytes());
-            throw new RuntimeException("Tesseract OCR failed: " + error);
+            throw new RuntimeException("Tesseract OCR failed (exit " + exitCode + "): " + error);
         }
 
         return result.trim();
     }
 
     /**
-     * Extract text from first page of PDF only
-     * Combines direct text extraction with OCR for scanned pages
-     * @param pdfFile The PDF file
-     * @return Extracted text from first page
-     * @throws Exception if extraction fails
+     * Extract text from the first page of a PDF only.
+     * Tries direct text extraction first; falls back to OCR for scanned pages.
      */
     private String extractTextFromPDFFirstPage(File pdfFile) throws Exception {
         try (PDDocument document = PDDocument.load(pdfFile)) {
@@ -79,34 +85,26 @@ public class OcrService {
             // If direct extraction yields substantial text, use it
             if (directText != null && directText.trim().length() > 50) {
                 return directText.trim();
-            } else {
-                // First page is likely scanned - use OCR
-                PDFRenderer renderer = new PDFRenderer(document);
+            }
 
-                // Render first page to image (300 DPI for good quality)
-                BufferedImage pageImage = renderer.renderImageWithDPI(0, 300);
+            // First page is likely scanned — use OCR
+            PDFRenderer renderer = new PDFRenderer(document);
+            BufferedImage pageImage = renderer.renderImageWithDPI(0, 300);
 
-                // Save temporary image
-                File tempImage = File.createTempFile("pdf_first_page", ".png");
-                ImageIO.write(pageImage, "png", tempImage);
+            File tempImage = File.createTempFile("pdf_first_page_", ".png");
+            ImageIO.write(pageImage, "png", tempImage);
 
-                try {
-                    // Extract text from page image
-                    String pageText = extractTextFromImage(tempImage);
-                    return pageText != null ? pageText.trim() : "";
-                } finally {
-                    // Clean up temporary image
-                    tempImage.delete();
-                }
+            try {
+                String pageText = extractTextFromImage(tempImage);
+                return pageText != null ? pageText.trim() : "";
+            } finally {
+                tempImage.delete();
             }
         }
     }
 
     /**
-     * Get the number of pages in a PDF
-     * @param pdfFile The PDF file
-     * @return Number of pages
-     * @throws IOException if file cannot be read
+     * Get the number of pages in a PDF.
      */
     public int getPdfPageCount(File pdfFile) throws IOException {
         try (PDDocument document = PDDocument.load(pdfFile)) {
@@ -114,22 +112,17 @@ public class OcrService {
         }
     }
 
-    /**
-     * Check if a file is a PDF
-     * @param file The file to check
-     * @return true if PDF, false otherwise
-     */
     public boolean isPdf(File file) {
         return file != null && file.getName().toLowerCase().endsWith(".pdf");
     }
 
     /**
-     * Check if Tesseract is available
-     * @return true if Tesseract is installed and accessible
+     * Check if Tesseract is available on the current system.
      */
     public boolean isTesseractAvailable() {
         try {
-            ProcessBuilder pb = new ProcessBuilder("tesseract", "--version");
+            ProcessBuilder pb = new ProcessBuilder(getTesseractPath(), "--version");
+            pb.redirectErrorStream(true);
             Process process = pb.start();
             int exitCode = process.waitFor();
             return exitCode == 0;

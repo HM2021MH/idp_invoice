@@ -116,7 +116,7 @@ public class InvoiceController {
             }
 
             String cleaned = cleanerService.cleanJsonResponse(llmResponse);
-
+            System.out.println("Response : "+ cleaned);
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "mode", "extract",
