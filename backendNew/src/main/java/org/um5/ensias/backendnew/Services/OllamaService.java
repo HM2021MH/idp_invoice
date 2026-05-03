@@ -21,6 +21,7 @@ public class OllamaService {
             "qwen2.5:0.5b", "qwen2.5:0.5b"
     );
 
+
     private WebClient getWebClient() {
         return WebClient.builder()
                 .baseUrl(ollamaBaseUrl)
@@ -29,7 +30,7 @@ public class OllamaService {
     }
 
     public String runModel(String prompt, String modelKey) {
-        String modelName = MODEL_MAP.getOrDefault(modelKey, "phi3:mini");
+        String modelName = MODEL_MAP.getOrDefault(modelKey, "qwen2.5:0.5b");
 
         Map<String, Object> body = Map.of(
                 "model",  modelName,
@@ -82,18 +83,18 @@ public class OllamaService {
      * Runs in background — does not block application startup.
      */
     @jakarta.annotation.PostConstruct
-public void warmUp() {
-    new Thread(() -> {
-        try {
-            System.out.println("🔥 Pre-warming Ollama model: phi3:mini");
-            Thread.sleep(15_000);
-            runModel("Say OK", "phi3:mini");
-            System.out.println("✅ Ollama warm-up complete");
-        } catch (Exception e) {
-            System.out.println("⚠️ Warm-up failed (non-fatal): " + e.getMessage());
-        }
-    }).start();
-}
+    public void warmUp() {
+        new Thread(() -> {
+            try {
+                System.out.println("🔥 Pre-warming model");
+                Thread.sleep(15_000);
+                runModel("Say OK", "qwen2.5:0.5b");
+                System.out.println("✅ Ollama warm-up complete");
+            } catch (Exception e) {
+                System.out.println("⚠️ Warm-up failed (non-fatal): " + e.getMessage());
+            }
+        }).start();
+    }
 
     public String runPhi3(String prompt) {
         return runModel(prompt, "phi3:mini");

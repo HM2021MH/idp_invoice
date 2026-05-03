@@ -61,7 +61,7 @@ services:
     entrypoint: >
       sh -c "ollama serve &
              sleep 10 &&
-             ollama pull phi3:mini &&
+             ollama pull qwen2.5:0.5b &&
              wait"
 
 volumes:

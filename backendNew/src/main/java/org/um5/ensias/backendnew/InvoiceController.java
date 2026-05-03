@@ -43,7 +43,7 @@ public class InvoiceController {
             @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "base64File", required = false) String base64File,
             @RequestParam("mode") String mode,
-            @RequestParam(value = "model", defaultValue = "phi3:mini") String model,
+            @RequestParam(value = "model", defaultValue = "qwen2.5:0.5b") String model,
             @RequestParam(value = "schema", required = false) String schema
     ) {
 
