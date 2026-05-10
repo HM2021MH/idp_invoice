@@ -5,7 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.um5.ensias.backendnew.Services.OcrService;
-import org.um5.ensias.backendnew.Services.OllamaService;
+import org.um5.ensias.backendnew.Services.ModelService;
 import org.um5.ensias.backendnew.Services.PromptService;
 import org.um5.ensias.backendnew.Services.ResponseCleanerService;
 
@@ -20,7 +20,7 @@ import java.util.*;
 public class InvoiceController {
 
     private final OcrService ocrService;
-    private final OllamaService ollamaService;
+    private final ModelService modelService;
     private final PromptService promptService;
     private final ResponseCleanerService cleanerService;
 
@@ -29,11 +29,11 @@ public class InvoiceController {
     );
 
     public InvoiceController(OcrService ocrService,
-                             OllamaService ollamaService,
+                             ModelService modelService,
                              PromptService promptService,
                              ResponseCleanerService cleanerService) {
         this.ocrService = ocrService;
-        this.ollamaService = ollamaService;
+        this.modelService = modelService;
         this.promptService = promptService;
         this.cleanerService = cleanerService;
     }
@@ -109,7 +109,7 @@ public class InvoiceController {
 
             String prompt = promptService.buildExtractionPrompt(ocrText, schema);
 
-            String llmResponse = ollamaService.runModel(prompt, model);
+            String llmResponse = modelService.runModel(prompt, model);
 
             if (llmResponse == null || llmResponse.trim().isEmpty()) {
                 return error("LLM returned empty response");

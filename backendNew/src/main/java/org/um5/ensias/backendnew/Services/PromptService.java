@@ -65,42 +65,37 @@ public class PromptService {
             }
         }
 
-        // ✅ Debug
-        System.out.println("📦 FINAL SCHEMA USED:\n" + schemaToUse);
 
-        return String.format("""
-            You are an AI specialized in invoice data extraction.
+        String finalSc = String.format("""
+    You are a data extraction engine. Your only job is to extract invoice data into JSON.
 
-            CRITICAL RULES:
+    OUTPUT RULES — NON-NEGOTIABLE:
+    - Output ONLY a single JSON object
+    - Start with { and end with }
+    - No markdown, no code fences, no backticks
+    - No explanation, no comments
+    - No duplicate keys (if a field appears twice, keep only the first)
+    - All string values must have newlines escaped as \\n
+    - If a field value is missing from the text, use null (not empty string "")
+    - Numbers must be numeric (not strings): "total": 980.00 not "total": "980.00"
 
-            1. EXACT EXTRACTION ONLY:
-               - Copy values EXACTLY as they appear
-               - DO NOT calculate anything
+    EXTRACTION RULES:
+    - Copy values EXACTLY as they appear in the OCR text
+    - Do NOT calculate, infer, or guess any value
+    - Only include fields that are defined in the SCHEMA below
+    - Only include a field if its value is explicitly present in the OCR text
 
-            2. STRICT SCHEMA RULE:
-               - ONLY use fields defined in the schema
-               - DO NOT add fields outside schema
+    SCHEMA (follow this structure exactly):
+    %s
 
-            3. FIELD INCLUSION:
-               - Include a field ONLY if:
-                 (a) it exists in OCR text
-                 (b) it exists in schema
+    OCR TEXT:
+    %s
 
-            4. OUTPUT FORMAT:
-               - Return ONLY raw JSON
-               - No markdown
-               - Start with { and end with }
+    JSON OUTPUT:
+    """, schemaToUse, ocrText);
+        System.out.println("📦 FINAL SCHEMA USED:\n" + finalSc);
 
-            SCHEMA:
-            %s
-
-            OCR TEXT:
-            <
-            %s
-            >>>
-
-            OUTPUT: Raw JSON only
-            """, schemaToUse, ocrText);
+        return finalSc;
     }
 
 
