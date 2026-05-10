@@ -16,9 +16,7 @@ public class OllamaService {
     private String ollamaBaseUrl;
 
     private static final Map<String, String> MODEL_MAP = Map.of(
-            "phi3:mini",    "phi3:mini",
-            "llama3.2:1b",  "llama3.2:1b",
-            "qwen2.5:0.5b", "qwen2.5:0.5b"
+            "invoice-extractor", "invoice-extractor"
     );
 
 
@@ -30,7 +28,7 @@ public class OllamaService {
     }
 
     public String runModel(String prompt, String modelKey) {
-        String modelName = MODEL_MAP.getOrDefault(modelKey, "qwen2.5:0.5b");
+        String modelName = MODEL_MAP.getOrDefault(modelKey, "invoice-extractor");
 
         Map<String, Object> body = Map.of(
                 "model",  modelName,
@@ -94,21 +92,5 @@ public class OllamaService {
                 System.out.println("⚠️ Warm-up failed (non-fatal): " + e.getMessage());
             }
         }).start();
-    }
-
-    public String runPhi3(String prompt) {
-        return runModel(prompt, "phi3:mini");
-    }
-
-    public boolean isModelAvailable(String modelKey) {
-        return MODEL_MAP.containsKey(modelKey);
-    }
-
-    public String[] getAvailableModels() {
-        return MODEL_MAP.keySet().toArray(new String[0]);
-    }
-
-    public String getModelName(String modelKey) {
-        return MODEL_MAP.getOrDefault(modelKey, "phi3:mini");
     }
 }

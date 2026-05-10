@@ -261,7 +261,9 @@ export default function AnalyzeForm({
     <>
       {/* ── Analyze button ── */}
       {!file.isSplitted ? (
-        <Button className="w-full mb-6 py-6 text-lg" onClick={startAnalyze} disabled={isAnalyzing}>
+        <Button 
+        data-analyze-button
+        className="w-full mb-6 py-6 text-lg" onClick={startAnalyze} disabled={isAnalyzing}>
           {isAnalyzing ? <Loader2 className="animate-spin" /> : <Brain />}
           Analyze with AI
         </Button>
@@ -355,7 +357,9 @@ export default function AnalyzeForm({
           >
             <Trash2 />
           </Button>
-          <Button type="submit" disabled={isSaving}>
+          <Button 
+          data-save-button 
+          type="submit" disabled={isSaving}>
             {isSaving ? <Loader2 className="animate-spin" /> : <ArrowDownToLine />}
             Save
           </Button>
