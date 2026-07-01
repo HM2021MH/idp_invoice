@@ -10,6 +10,7 @@ import {
 import { userFormSchema } from "@/forms/users"
 import { ActionState } from "@/lib/actions"
 import { getCurrentUser } from "@/lib/auth"
+import { prisma } from "@/lib/db"
 import { uploadStaticImage } from "@/lib/uploads"
 import { codeFromName, randomHexColor } from "@/lib/utils"
 import { createCategory, deleteCategory, updateCategory } from "@/models/categories"
@@ -287,4 +288,32 @@ export async function deleteFieldAction(userId: string, code: string) {
   }
   revalidatePath("/settings/fields")
   return { success: true }
+}
+
+
+export async function addModelAction(
+  _prevState: unknown,
+  formData: FormData
+) {
+  const name = formData.get("name") as string
+  const provider = formData.get("provider") as string
+  const apiIdentifier = formData.get("apiIdentifier") as string
+ 
+  if (!name || !provider || !apiIdentifier) {
+    return { error: "All fields are required." }
+  }
+ 
+  try {
+    const model = await prisma.aIModel.create({
+      data: { name, provider, apiIdentifier },
+    })
+ 
+    revalidatePath("/settings")
+    return { success: true, model }
+  } catch (e: any) {
+    if (e.code === "P2002") {
+      return { error: "A model with that API identifier already exists." }
+    }
+    return { error: "Failed to add model. Please try again." }
+  }
 }

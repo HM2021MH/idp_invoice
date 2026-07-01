@@ -259,19 +259,7 @@ export default function AnalyzeForm({
 
   return (
     <>
-      {/* ── Analyze button ── */}
-      {!file.isSplitted ? (
-        <Button 
-        data-analyze-button
-        className="w-full mb-6 py-6 text-lg" onClick={startAnalyze} disabled={isAnalyzing}>
-          {isAnalyzing ? <Loader2 className="animate-spin" /> : <Brain />}
-          Analyze with AI
-        </Button>
-      ) : (
-        <div className="flex justify-end mb-4">
-          <Badge variant="outline">This file has been split up</Badge>
-        </div>
-      )}
+    
 
       {analyzeError && <FormError>{analyzeError}</FormError>}
 
@@ -348,22 +336,38 @@ export default function AnalyzeForm({
           </CollapsibleSection>
         )}
 
-        {/* Actions */}
-        <div className="flex justify-between pt-6">
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => startTransition(() => deleteAction(file.id))}
-          >
-            <Trash2 />
-          </Button>
-          <Button 
-          data-save-button 
-          type="submit" disabled={isSaving}>
-            {isSaving ? <Loader2 className="animate-spin" /> : <ArrowDownToLine />}
-            Save
-          </Button>
-        </div>
+         {/* Actions */}
+<div className="flex justify-between pt-6">
+  <Button
+    type="button"
+    variant="destructive"
+    onClick={() => startTransition(() => deleteAction(file.id))}
+  >
+    <Trash2 />
+  </Button>
+
+  <div className="flex items-center gap-2">
+    {file.isSplitted && (
+      <Badge variant="outline">This file has been split up</Badge>
+    )}
+    {!file.isSplitted && (
+      <Button
+        data-analyze-button
+        type="button"
+        variant="outline"
+        onClick={startAnalyze}
+        disabled={isAnalyzing}
+      >
+        {isAnalyzing ? <Loader2 className="animate-spin" /> : <Brain />}
+        Analyze
+      </Button>
+    )}
+    <Button data-save-button type="submit" disabled={isSaving}>
+      {isSaving ? <Loader2 className="animate-spin" /> : <ArrowDownToLine />}
+      Save
+    </Button>
+  </div>
+</div>
 
         {deleteState?.error && <FormError>{deleteState.error}</FormError>}
         {saveError && <FormError>{saveError}</FormError>}

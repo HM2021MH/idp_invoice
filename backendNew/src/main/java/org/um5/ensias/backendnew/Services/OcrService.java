@@ -17,7 +17,7 @@ public class OcrService {
 
     public enum Engine { DOCLING, TESSERACT }
 
-    private static final Engine DEFAULT_ENGINE = Engine.DOCLING;
+    private static final Engine DEFAULT_ENGINE = Engine.TESSERACT;
 
     // -------------------------------------------------------------------------
     // Public API

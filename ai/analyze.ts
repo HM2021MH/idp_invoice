@@ -4,7 +4,7 @@ import { ActionState } from "@/lib/actions"
 import { updateFile } from "@/models/files"
 import { AnalyzeAttachment } from "./attachments"
 import { requestLLM } from "./providers/llmProvider"
-
+import { getDefaultModel } from "@/lib/get-default-model"
 export type AnalysisResult = {
   output: Record<string, unknown>
   tokensUsed: number
@@ -21,7 +21,8 @@ export async function analyzeTransaction(
     //console.log("Analyzing transaction with prompt:", prompt)
     //console.log("Using schema:", schema)
     //console.log("With attachments:", attachments)
-    const response = await requestLLM({ prompt, schema, attachments })
+    const model = await getDefaultModel()
+    const response = await requestLLM({ prompt, schema, attachments, model  })
     console.log("LLM response:", response)
     if (response.error) throw new Error(response.error)
 

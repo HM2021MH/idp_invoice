@@ -237,3 +237,12 @@ model Progress {
   @@index([userId])
   @@map("progress")
 }
+
+model AIModel {
+  id            String   @id @default(cuid())
+  name          String
+  provider      String
+  apiIdentifier String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
